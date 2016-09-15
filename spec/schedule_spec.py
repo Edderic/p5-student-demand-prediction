@@ -8,7 +8,15 @@ from timezone import Timezone
 class ScheduleSpec(Spec):
     class timezone(Spec):
         def should_return_the_timezone_object(self):
-            pass
+            timezone = Timezone('Abu Dhabi')
+            lessons = [{'start_time': 0, 'day_of_week': 0},
+                    {'start_time': 1, 'day_of_week': 0},
+                    {'start_time': 0.5, 'day_of_week': 0},
+                    ]
+
+            s = Schedule(lessons=lessons, timezone=timezone)
+
+            expect(s.timezone()).to.equal(timezone)
     class freq_lessons(Spec):
         def should_return_the_number_of_lessons(self):
             pass
