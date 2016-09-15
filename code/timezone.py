@@ -1,3 +1,5 @@
+import numpy as np
+
 class Timezone():
     def __init__(self, tz_string=None):
         if tz_string == None:
