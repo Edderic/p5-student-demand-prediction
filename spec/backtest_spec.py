@@ -38,7 +38,10 @@ class BackTestSpec(Spec):
             summaries = pd.DataFrame(args)
             summaries['first_start_datetime'] = pd.to_datetime(summaries['first_start_datetime'])
 
-            bt = BackTest(data=summaries, model=DumbModel, training_data_span_months=2)
+            bt = BackTest(data=summaries,
+                    model=DumbModel,
+                    num_simulations=10,
+                    training_data_span_months=2)
             score = bt.scores()
             expect('2016-6' not in score.index.values).to.equal(True)
             expect('2016-7' in score.index.values).to.equal(True)
@@ -64,7 +67,10 @@ class BackTestSpec(Spec):
         summaries = pd.DataFrame(args)
         summaries['first_start_datetime'] = pd.to_datetime(summaries['first_start_datetime'])
 
-        bt = BackTest(data=summaries, model=DumbModel, training_data_span_months=1)
+        bt = BackTest(data=summaries,
+                model=DumbModel,
+                num_simulations=10,
+                training_data_span_months=1)
         score = bt.scores()
         expect('2016-8' in score.index.values).to.equal(True)
         expect('2016-7' not in score.index.values).to.equal(True)

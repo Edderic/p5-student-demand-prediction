@@ -25,8 +25,14 @@ class DumbModel():
 
         return schedule
 
-    def predict(self, business_forecast):
-        return Bins(schedule=self.generate_sample_schedule(business_forecast))
+    def predict(self, business_forecast, num_simulations=10000):
+        total_bins = np.zeros(6) # 6 bins
+
+        for i in range(num_simulations):
+            total_bins += Bins(\
+                    schedule=self.generate_sample_schedule(business_forecast)).bins()
+
+        return total_bins / num_simulations
 
 class SmartHeuristicModel(DumbModel):
     def __init__(self):

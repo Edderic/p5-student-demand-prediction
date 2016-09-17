@@ -4,10 +4,15 @@ from schedule import ActualSchedule
 import pandas as pd
 
 class BackTest():
-    def __init__(self, data=None, model=None, training_data_span_months=1):
+    def __init__(self,
+            data=None,
+            model=None,
+            num_simulations=10000,
+            training_data_span_months=1):
         self._data_df = data
         self._model = model
         self.training_data_span_months = training_data_span_months
+        self.num_simulations = num_simulations
 
     def scores(self):
         indices = [] # index of a row, formatted YYYY-M (e.g. 2016-8, 2016-9)
@@ -21,7 +26,8 @@ class BackTest():
             prediction = m.predict(\
                     BusinessForecast(\
                     self.test_data(i+self.training_data_span_months))\
-                    .convert()).bins()
+                    .convert(),
+                    num_simulations=self.num_simulations)
 
             actual = ActualSchedule(\
                     self.test_data(i+self.training_data_span_months))\

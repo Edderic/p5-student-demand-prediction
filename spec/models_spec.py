@@ -3,6 +3,7 @@ import pandas as pd
 sys.path.append(os.path.join(os.path.dirname(__file__), '../', 'code'))
 
 from specter import Spec, expect
+
 from models import DumbModel
 from models import SmartHeuristicModel
 
@@ -64,6 +65,7 @@ class ModelsSpec(Spec):
 
 
         class predict(Spec):
+
             def should_predict_with_bins(self):
                 dumb_model = DumbModel()
 
@@ -74,5 +76,5 @@ class ModelsSpec(Spec):
                          'timezone': 'Pacific (US & Canada)',
                          'frequency': 2 }]
 
-                p = dumb_model.predict(business_forecast)
+                p = dumb_model.predict(business_forecast, num_simulations=10)
                 expect(p[0] + p[1] + p[2] + p[3] + p[4] + p[5]).to.equal(8)

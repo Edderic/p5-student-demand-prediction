@@ -70,9 +70,6 @@ class RandomWeeklyLessonSpec(Spec):
         def should_respect_the_start_time_range(self):
             rwl = RandomWeeklyLesson(start_time_range=(8,20))
             rng = {'min': 8, 'max': 20}
-            print "rwl.start_time()"
-            print rwl.start_time()
-            print "\n"
 
             expect(should_be_in_range(rwl.start_time(), rng=rng)).to.equal(True)
 

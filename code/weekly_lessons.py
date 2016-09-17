@@ -3,9 +3,16 @@ import pandas as pd
 from timezone import Timezone
 
 class RandomWeeklyLesson():
-    def __init__(self, timezone=None):
-        self._day_of_week = np.random.randint(7) # [0,6]; seven days in a week
-        self._start_time = self.discretize_start_time(np.random.rand(1) * 23.75) # [0, 23.75]
+    START_TIME_TO_INDEX_MULTIPLIER = 4
+
+    def __init__(self,
+            day_of_week_range=(0, 7,),
+            start_time_range=(0, 23.75,),
+            timezone=None):
+        dw_low, dw_high = day_of_week_range
+        self._day_of_week = np.random.randint(low=dw_low,
+                high=dw_high) # [0,6]; seven days in a week
+        self._start_time = self.generate_start_time(start_time_range) # [0, 23.75]
         self._timezone = timezone or np.random.choice(Timezone.mapping().values())
 
     def day_of_week(self):
@@ -17,8 +24,17 @@ class RandomWeeklyLesson():
     def timezone(self):
         return self._timezone
 
-
     # helper
+    def generate_start_time(self, start_time_range):
+        st_min, st_max = start_time_range
+        sti_min = self.convert_to_start_time_index(st_min)
+        sti_max = self.convert_to_start_time_index(st_max)
+
+        return np.random.randint(sti_min, sti_max) / RandomWeeklyLesson.START_TIME_TO_INDEX_MULTIPLIER
+
+    def convert_to_start_time_index(self, start_time):
+        return start_time * RandomWeeklyLesson.START_TIME_TO_INDEX_MULTIPLIER
+
     def discretize_start_time(self,start_time):
         integer = int(start_time)
         decimals = start_time - integer
