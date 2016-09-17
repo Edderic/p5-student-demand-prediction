@@ -60,10 +60,19 @@ class RandomWeeklyLessonSpec(Spec):
             rwl = RandomWeeklyLesson(timezone=tz)
             expect(rwl.timezone()).to.equal(tz)
 
-    # class given_timezone(Spec):
-        # def should_use_that_timezone_by_default(self):
-            # timezone = Timezone('Abu Dhabi')
-            # rwl = RandomWeeklyLesson(timezone=timezone)
-            # rng = {'min': 0, 'max': 6}
-            # expect(should_be_in_range(rwl.day_of_week(), rng=rng)).to.be_true()
+    class adding_day_range(Spec):
+        def should_respect_the_day_range(self):
+            rwl = RandomWeeklyLesson(day_of_week_range=(0,4))
+            rng = {'min': 0, 'max': 4}
+            expect(should_be_in_range(rwl.day_of_week(), rng=rng)).to.equal(True)
+
+    class adding_start_time_range(Spec):
+        def should_respect_the_start_time_range(self):
+            rwl = RandomWeeklyLesson(start_time_range=(8,20))
+            rng = {'min': 8, 'max': 20}
+            print "rwl.start_time()"
+            print rwl.start_time()
+            print "\n"
+
+            expect(should_be_in_range(rwl.start_time(), rng=rng)).to.equal(True)
 
