@@ -4,10 +4,78 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../', 'code'))
 
 from specter import Spec, expect
 
-from models import DumbModel
-from models import SmartHeuristicModel
+from models import DumbModel, ProbModel, SmartHeuristicModel
 
 class ModelsSpec(Spec):
+    class prob_model(Spec):
+        class predict(Spec):
+            def should_take_into_account_conditional_probability(self):
+                user_tz = ['Eastern (US & Canada)', 'Pacific (US & Canada)']
+                l1_time = [9, 9]
+                l1_day = [0, 1]
+                l2_time = [9, 9]
+                l2_day = [3, 4]
+                l3_time = [None, 9]
+                l3_day = [None, 5]
+                schedule_type = [2, 3]
+
+                training_data = pd.DataFrame({ 'user_tz': user_tz,
+                    'l1_time': l1_time,
+                    'l1_day': l1_day,
+                    'l2_time': l2_time,
+                    'l2_day': l2_day,
+                    'l3_time': l3_time,
+                    'l3_day': l3_day,
+                    'schedule_type': schedule_type
+                    })
+
+                business_forecast = [{'schedule_type': 2,
+                         'timezone': 'Eastern (US & Canada)',
+                         'frequency': 1 },
+                         {'schedule_type': 3,
+                         'timezone': 'Pacific (US & Canada)',
+                         'frequency': 2 }]
+
+                model = ProbModel()
+
+                model.fit(training_data)
+                p = model.predict(business_forecast, num_simulations=10)
+                expect(True).to.equal(True)
+
+            def handles_predicting_cases_it_has_not_seen_before(self):
+                user_tz = ['Eastern (US & Canada)', 'Pacific (US & Canada)']
+                l1_time = [9, 9]
+                l1_day = [0, 1]
+                l2_time = [9, 9]
+                l2_day = [3, 4]
+                l3_time = [None, 9]
+                l3_day = [None, 5]
+                schedule_type = [2, 3]
+
+                training_data = pd.DataFrame({ 'user_tz': user_tz,
+                    'l1_time': l1_time,
+                    'l1_day': l1_day,
+                    'l2_time': l2_time,
+                    'l2_day': l2_day,
+                    'l3_time': l3_time,
+                    'l3_day': l3_day,
+                    'schedule_type': schedule_type
+                    })
+
+                business_forecast = [{'schedule_type': 1,
+                         'timezone': 'Eastern (US & Canada)',
+                         'frequency': 1 },
+                         {'schedule_type': 4,
+                         'timezone': 'Pacific (US & Canada)',
+                         'frequency': 2 }]
+
+                model = ProbModel()
+
+                model.fit(training_data)
+                p = model.predict(business_forecast, num_simulations=10)
+
+                expect(True).to.equal(True)
+
     class smart_heuristic_model(Spec):
         class generate_sample_schedule(Spec):
             def should_not_have_weird_hours(self):
