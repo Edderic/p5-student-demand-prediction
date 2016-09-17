@@ -4,9 +4,11 @@ from weekly_lessons import RandomWeeklyLesson
 from schedule import Schedule
 from bins import Bins
 
+
 class DumbModel():
-    def __init__(self):
-        pass
+    def __init__(self, start_time_range=(0,23.75,), day_of_week_range=(0,6,)):
+        self.start_time_range = start_time_range
+        self.day_of_week_range = day_of_week_range
 
     def fit(self, training_data):
         pass
@@ -16,10 +18,17 @@ class DumbModel():
 
         for i in business_forecast:
             for j in range(i['frequency'] * i['schedule_type']):
-                schedule.add_lesson(RandomWeeklyLesson())
+                schedule.add_lesson(\
+                        RandomWeeklyLesson(\
+                        start_time_range=self.start_time_range,
+                        day_of_week_range=self.day_of_week_range))
 
         return schedule
 
     def predict(self, business_forecast):
         return Bins(schedule=self.generate_sample_schedule(business_forecast))
 
+class SmartHeuristicModel(DumbModel):
+    def __init__(self):
+        self.start_time_range = (8,20) # ppl take lessons during "normal" hours
+        self.day_of_week_range = (0,4) # ppl take lessons during the week

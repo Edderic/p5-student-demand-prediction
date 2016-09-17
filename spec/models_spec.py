@@ -4,8 +4,37 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../', 'code'))
 
 from specter import Spec, expect
 from models import DumbModel
+from models import SmartHeuristicModel
 
 class ModelsSpec(Spec):
+    class smart_heuristic_model(Spec):
+        class generate_sample_schedule(Spec):
+            def should_not_have_weird_hours(self):
+                user_tz = ['Eastern (US & Canada)', 'Pacific (US & Canada)']
+                l1_time = [9, 9]
+                l2_time = [9, 9]
+                l3_time = [None, 9]
+
+                training_data = pd.DataFrame({ 'user_tz': user_tz,
+                    'l1_time': l1_time,
+                    'l2_time': l2_time
+                    })
+
+                business_forecast = [{'schedule_type': 2,
+                         'timezone': 'Eastern (US & Canada)',
+                         'frequency': 1 },
+                         {'schedule_type': 3,
+                         'timezone': 'Pacific (US & Canada)',
+                         'frequency': 2 }]
+
+                smart_heuristic_model = SmartHeuristicModel()
+                smart_heuristic_model.fit(training_data)
+
+                schedule = smart_heuristic_model.\
+                        generate_sample_schedule(business_forecast)
+                _sum = schedule._table_df.sum().sum()
+                expect(_sum).to.equal(8)
+
     class dumb_model(Spec):
         class generate(Spec):
             def should_create_a_sample_that_meets_business_forecast_criteria(self):
