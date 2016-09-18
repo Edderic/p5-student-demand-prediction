@@ -30,10 +30,10 @@ class ModelsSpec(Spec):
                     })
 
                 business_forecast = [{'schedule_type': 2,
-                         'timezone': 'Eastern (US & Canada)',
+                         'user_tz': 'Eastern (US & Canada)',
                          'frequency': 1 },
                          {'schedule_type': 3,
-                         'timezone': 'Pacific (US & Canada)',
+                         'user_tz': 'Pacific (US & Canada)',
                          'frequency': 2 }]
 
                 model = ProbModel()
@@ -63,10 +63,10 @@ class ModelsSpec(Spec):
                     })
 
                 business_forecast = [{'schedule_type': 1,
-                         'timezone': 'Eastern (US & Canada)',
+                         'user_tz': 'Eastern (US & Canada)',
                          'frequency': 1 },
                          {'schedule_type': 4,
-                         'timezone': 'Pacific (US & Canada)',
+                         'user_tz': 'Pacific (US & Canada)',
                          'frequency': 2 }]
 
                 model = ProbModel()

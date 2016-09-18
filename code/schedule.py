@@ -13,7 +13,7 @@ class ActualSchedule():
         for i in data_df.index.values:
             row = data_df.ix[i]
             lessons = []
-            for j in range(1, row.schedule_type + 1):
+            for j in range(1, int(row.schedule_type + 1)):
                 lessons.append(WeeklyLesson(start_time=row['l{}_time'.format(j)],
                     day_of_week=row['l{}_day'.format(j)]))
 
@@ -66,10 +66,10 @@ class Schedule():
         start_time = lesson.start_time()
         day_of_week = lesson.day_of_week()
 
-        val = self._table_df[day_of_week][self.convert_start_time_to_index(start_time)]
+        val = self._table_df[day_of_week][int(self.convert_start_time_to_index(start_time))]
         self._table_df.set_value(index=self.convert_start_time_to_index(start_time),
                 col=day_of_week, value=val+1)
 
     def convert_start_time_to_index(self, start_time):
-        return start_time * self.QUARTERS_IN_AN_HOUR
+        return int(start_time * self.QUARTERS_IN_AN_HOUR)
 

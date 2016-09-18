@@ -1,6 +1,7 @@
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from business_forecast import BusinessForecast
 from schedule import ActualSchedule
+import numpy as np
 import pandas as pd
 
 class BackTest():
@@ -14,32 +15,43 @@ class BackTest():
         self.training_data_span_months = training_data_span_months
         self.num_simulations = num_simulations
 
-    def scores(self):
+    def errors(self):
         indices = [] # index of a row, formatted YYYY-M (e.g. 2016-8, 2016-9)
         predictions = []
-        actuals = []
-        scores = [] # errors. Lower is better
+        errors = [] # errors. Lower is better
+        test_data_size = []
 
         for i in range(0,self.num_months()-self.training_data_span_months):
             m = self._model()
             m.fit(self.training_data(i, self.training_data_span_months))
+
+            td = self.test_data(i+self.training_data_span_months)
+
+            print "Generating prediction..."
             prediction = m.predict(\
                     BusinessForecast(\
-                    self.test_data(i+self.training_data_span_months))\
+                    td)\
                     .convert(),
                     num_simulations=self.num_simulations)
 
             actual = ActualSchedule(\
-                    self.test_data(i+self.training_data_span_months))\
+                    td)\
                     .bins()
 
-            scores.append(mean_squared_error(actual, prediction))
-            indices.append(self.year_month_index(i+self.training_data_span_months))
+            # error = mean_squared_error(actual, prediction) ** 0.5
+            error = mean_absolute_error(actual, prediction)
+            errors.append(error)
+
+            index = self.year_month_index(i+self.training_data_span_months)
+            indices.append(index)
+            print "time: {}, error: {}".format(index, error)
+
             predictions.append(prediction)
-            actuals.append(actual)
+            test_data_size.append(actual.sum())
 
         return pd.DataFrame({
-            'scores': scores
+            'errors': errors,
+            'test_data_size': test_data_size
             }).set_index([indices])
 
     #private

@@ -42,10 +42,10 @@ class BackTestSpec(Spec):
                     model=DumbModel,
                     num_simulations=10,
                     training_data_span_months=2)
-            score = bt.scores()
-            expect('2016-6' not in score.index.values).to.equal(True)
-            expect('2016-7' in score.index.values).to.equal(True)
-            expect('2016-8' in score.index.values).to.equal(True)
+            error = bt.errors()
+            expect('2016-6' not in error.index.values).to.equal(True)
+            expect('2016-7' in error.index.values).to.equal(True)
+            expect('2016-8' in error.index.values).to.equal(True)
     def should_generate_errors_over_time_for_each_model(self):
         first_start_datetime = ['2016-07-16 09:00:00-04:00',
                 '2016-08-16 09:00:00-04:00']
@@ -71,7 +71,7 @@ class BackTestSpec(Spec):
                 model=DumbModel,
                 num_simulations=10,
                 training_data_span_months=1)
-        score = bt.scores()
-        expect('2016-8' in score.index.values).to.equal(True)
-        expect('2016-7' not in score.index.values).to.equal(True)
-        expect('2016-6' not in score.index.values).to.equal(True)
+        error = bt.errors()
+        expect('2016-8' in error.index.values).to.equal(True)
+        expect('2016-7' not in error.index.values).to.equal(True)
+        expect('2016-6' not in error.index.values).to.equal(True)
