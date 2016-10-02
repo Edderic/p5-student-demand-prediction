@@ -1,10 +1,5 @@
-\documentclass{article}
+\documentclass[oneside]{article}
 \usepackage[utf8]{inputenc}
-
-\title{Predicting Student Demand}
-\author{Edderic Ugaddan}
-\date{September 2016}
-
 \usepackage{natbib}
 \usepackage{graphicx}
 \usepackage{amsmath, amsthm, amssymb}
@@ -15,10 +10,28 @@
 \DeclareMathOperator*{\argmin}{argmin}
 \DeclareMathOperator*{\argmax}{argmax}
 \newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\makeatletter
+
+\def\fixedlabel#1#2{%
+  \@bsphack%
+  \protected@write\@auxout{}%
+           {\string\newlabel{#1}{{#2}{\thepage}}}%
+             \@esphack}
+             \makeatother
 
 \begin{document}
 
+\title{Predicting Student Demand}
+\author{        Edderic Ugaddan \\
+                Lingo Live
+}
+\date{September 2016}
+
+
+
 \maketitle
+\tableofcontents
+\newpage
 
 
 \section{Definition}
@@ -65,14 +78,14 @@ to protect students' and companies' privacy.
 The end goal is to be able to create a model that generates potential students'
 schedules very well, so that Lingo Live could find the balance between
 under-hiring and over-hiring teachers. The challenge I would like to address is
-creating a model that predicts student demand (i.e. when lesson requests are
-generally likely to occur in the context of the week) for new students -- see
-Table \ref{tab:student_schedule_example} for an example of a student schedule.
+creating a model that predicts student demand (i.e. when lesson requests
+patterns are generally likely to occur in the context of the week) for new
+students -- see Table \ref{tab:student_schedule_example} for an example of a
+student schedule.
 
 \begin{table}[]
   \centering
   \caption{Example of a Student Weekly Schedule}
-  \label{my-label}
   \begin{tabular}{|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|}
     \hline
                   & \textbf{Mon} & \textbf{Tue} & \textbf{Wed} & \textbf{Thu} & \textbf{Fri} & \textbf{Sat} & \textbf{Sun} \\
@@ -88,27 +101,353 @@ Table \ref{tab:student_schedule_example} for an example of a student schedule.
   \end{tabular}\label{tab:student_schedule_example}
 \end{table}
 
-The strategy to build this model is as follows.  First, I will perform
-exploratory data analysis (EDA) to figure out the general trend of user
-schedules, using K-Means clustering. K-Means would group like-schedules
-together, and would give us "centroids," which are essentially the average
-"ideal" member of the clusters. Second, I would make use of the new-found
-knowledge to create a model that best predicts when people are going to take
-lessons. For benchmarking purposes, I would create two other models. First, I
-would create a model that assumes that schedules are distributed equally
-(EQ-DIST, Table \ref{tab:eq_dist}).  Second, I would then create a model
-that assumes schedules are equally distributed in the range of hours when most
-people are active (ACT, Table \ref{tab:act}). Finally, I would compare the performance of these
-models across time -- given access to 'previous' months, could these models
-predict the 'current' month?
+The strategy to build this model is as follows.  First, I would preprocess the
+data so that we could represent the lesson requests as sets of ``schedules". A
+``schedule" in our context would represent the general behavior of when a
+student takes lessons over a period of weeks. Once that is done, I would build
+a model and build the benchmarks to test it, which would help us answer the
+following questions: given access to 'previous' months, could these models
+predict the 'current' month? Which features make sense to keep? Which ones
+should be discarded? Which model does the best -- and by how much? Finally, I
+would perform sensitivity analysis to figure out how resilient the model is, so
+we can assess the validity of the model further, and help us figure out the
+weakspots of the model that we could improve on in the future.
+
+To simplify the problem of trying to figure out whether one model is better
+than another, we would bin the weekly schedule into smaller buckets: 0-4, 4-8,
+8-12, 12-16, 16-20, 20-0 local time. This was done because the possibilities of
+when a user would take lessons is quite big (could be in the hundred millions)
+relative to the sample size (which is $1,500$). Mapping $120$ combinations of
+features into only $6$ buckets becomes a much easier prediction problem.
+
+\subsection{Metrics}
+
+The error metric $e_b$ for bucket $b$ that we are trying to minimize is as follows:
+
+\begin{equation}
+  e_b = \lvert y_{b} - \hat{y}_{b} \rvert
+\end{equation}
+
+where $y$ is actual and $\hat{y}$ is predicted.  More specifically, $y_{b}$
+is the actual number of lessons that belong to bucket $b$, $\hat{y}_{b}$ is
+the predicted number of lessons that belong to bucket $b$.
+
+The total error, considering each bucket, then is just the sum of the errors
+for each bucket.
+
+\begin{align}
+  Total Error &= \sum_{b=0}^{z}{e_b} \\
+              &= \sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert}
+\end{align}
+
+where $z$ is the total number of buckets.
+
+We would like to be able to compare how much a prediction in one month compares
+against other months. The number of lessons from new students per month might
+vary considerably, as a function of the number of new students signing up, and
+the lesson frequency. Thus, for a certain month $m$, and model $a$, we could
+average out the total error by dividing by the number of bins $x$, and get
+the Mean Absolute Error (MAE):
+
+\begin{align}
+  MAE(m,a) &= \frac{1}{x}\sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert}\\
+\end{align}
+
+We would then measure how the models perform over time. We would split our data
+into months, and at any point in time, we would use the previous months to
+predict the "next" month (i.e. time series cross validation)\cite{tscv}. We would pick the
+model $g$ that best minimizes MAE on unseen test data over $o$ months:
+
+\begin{align}
+  g &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{MAE(m,a)} }{o}}\\
+    &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \frac{1}{x}\sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert} } }{o}}\\
+    &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert} } }{xo}}\\
+\end{align}
+
+MAE was chosen over other metrics (such as Mean Squared Error, MSE) because it is
+very intuitive -- the metric is in the same units as what we are trying to
+predict (i.e. number of lessons), so is definitely helpful in terms of
+interpretability. Interpretability is very important in our environment since
+other engineers would most likely add changes or enhancements in the future,
+so MAE was deemed to be a good enough metric.
+
+\section{Analysis}
+
+\subsection{Data Exploration}
+
+I extracted the original lesson request data from the Lingo Live production
+database by joining several tables, resulting in rows of lesson requests. A
+lesson request has an id (\emph{lr\_id}), and it has a start time
+(\emph{lr\_start\_datetime}). The lesson requests start times have a range from
+March 4, 2014 to November 29, 2016. ($\approx$ 2 years, 8 months).  It is
+associated to the student (via \emph{user\_id}), and the student has a timezone
+(\emph{user\_tz}). The student is also associated with a company (via
+\emph{company\_name}).  Some lesson requests also have a \emph{cr\_id}, which
+stands for "canceled request id," and exists when a teacher, student, or
+someone else has canceled the lesson request. See Table
+\ref{tab:summary_stats_all_students_part_1} and
+\ref{tab:summary_stats_all_students_part_2} for summary statistics.
 
 \begin{table}[]
   \centering
-  \caption{EQ-Dist Model: Assumes lesson requests (naively) start randomly anytime}
-  \label{tab:eq_dist}
+  \caption{Lesson Request Data Statistics of All Students: Part I}
+  \label{tab:summary_stats_all_students_part_1}
+  \begin{tabular}{rrrr}
+    \hline
+    \textbf{stats} & \textbf{user\_id} & \textbf{lr\_start\_datetime} & \textbf{lr\_id} \\
+    \hline
+    count   & 81003   & 81003    & 80973   \\
+    unique    & 1744   & 26052    & 80969  \\
+    top    & 360   & 2016-08-24 16:00:00   & 35944 \\
+    freq    & 439   & 28    & 2   \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[]
+  \centering
+  \caption{Lesson Request Data Statistics of All Students: Part II}
+  \label{tab:summary_stats_all_students_part_2}
+  \begin{tabular}{rrrr}
+    \hline
+    \textbf{stats} & \textbf{user\_tz} & \textbf{company\_name} & \textbf{cr\_id} \\
+    \hline
+    count   &   80388    & 81003    & 34821 \\
+    unique  & 49    & 1    & 34821 \\
+    top    & Pacific Time (US \& Canada)   & all\_students   & 38346 \\
+    freq    & 20128    & 81003    & 1 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\emph{user\_tz} makes use of Ruby on Rails' \emph{ActiveSupport::TimeZone}
+gem\cite{astz}.  (See the "Mapping" section online for more information about
+the possible values). In Table \ref{tab:freq_user_tz}, we show the number of
+unique users per timezone. The top 5 \emph{user\_tz} values are Pacific Time
+(US \& Canada), Brasilia, Eastern Time (US \& Canada), New Delhi, and Tokyo.
+This validates my intuition, as most customers are taking lessons in those
+timezones.
+
+One issue is that there are 940 lesson requests that are missing user
+timezones; they seem to be concentrated in the year 2014 -- not really sure why
+this is (Table \ref{tab:sample_lesson_request_missing_user_tz}). These 940
+lesson requests are associated with 88 users. These are discarded from the
+dataset used by the models since we cannot localize these times.
+
+
+\begin{table}[]
+  \centering
+  \caption{Sample Lesson Request Data of All Students}
+  \label{tab:sample_lesson_request_data}
+  \begin{tabular}{rrrr}
+    \hline
+     \textbf{user\_id} & \textbf{lr\_start\_datetime} & \textbf{lr\_id} & \textbf{cr\_id} \\
+    \hline
+     2077 & 2015-11-12 10:00:00-05:00 & 43290.0 & 33.0\\
+     1714 & 2015-10-06 17:00:00+09:00& 35837.0& 17985.0\\
+     3340 & 2016-09-30 08:00:00-07:00& 118395.0 & NaN\\
+     3289 & 2016-09-01 21:00:00-07:00& 117997.0 & NaN\\
+     1279 & 2015-12-15 14:00:00-02:00& 44700.0& 26217.0\\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[]
+  \centering
+  \caption{Sample of Lesson Requests that are missing \emph{user\_tz} Values}
+  \label{tab:sample_lesson_request_missing_user_tz}
+  \begin{tabular}{rrrrr}
+    \hline
+    \textbf{user\_id} & \textbf{lr\_start\_datetime} & \textbf{lr\_id} & \textbf{user\_tz} & \textbf{cr\_id} \\
+    \hline
+     362   & 2014-10-16 01:00:00.705356   & 24865.0    & NaN    &NaN \\
+     339   & 2014-06-19 21:00:00.273685   & 24414.0    & NaN    &NaN \\
+     361   & 2014-08-22 00:00:00.978073   & 27522.0    & NaN    &NaN \\
+     346   & 2014-08-06 16:00:00.927964   & 28159.0    & NaN    &NaN \\
+     78   & 2014-03-13 01:00:00.090054   & 24440.0    & NaN    &NaN \\
+     340   & 2014-06-21 19:00:00.822833   & 27594.0    & NaN    &NaN \\
+     345   & 2014-05-19 15:00:00.451452   & 26497.0    & NaN    &NaN \\
+     912   & 2014-06-26 01:00:00.534694   & 25951.0    & NaN    &NaN \\
+    \hline
+  \end{tabular}
+\end{table}
+
+
+
+\begin{table}[]
+  \centering
+  \caption{19 Most Frequent User Timezones}
+  \label{tab:freq_user_tz}
+  \begin{tabular}{rrrr}
+    \hline
+     \textbf{user\_tz} & \textbf{frequency}\\
+    \hline
+    Pacific Time (US \& Canada)    &431 \\
+    Brasilia                      &290 \\
+    Eastern Time (US \& Canada)    &145 \\
+    New Delhi                     &134 \\
+    Tokyo                         &109 \\
+    London                         &71 \\
+    Buenos Aires                   &65 \\
+    Chennai                        &64 \\
+    Central Time (US \& Canada)     &46 \\
+    Jerusalem                      &36 \\
+    Mexico City                    &34 \\
+    Paris                          &24 \\
+    Bogota                         &20 \\
+    Seoul                          &19 \\
+    Madrid                         &15 \\
+    Dublin                         &15 \\
+    Mountain Time (US \& Canada)    &15 \\
+    Kolkata                        &11 \\
+    Guadalajara                    &10 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+
+
+
+
+\subsection{Exploratory Visualization}
+
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{c@{\quad}ccc}
+    & a & b \\
+    1 & \includegraphics[scale=0.4]{img/all_students_lr_hexbin.png}\fixedlabel{all_students_lr_hexbin}{1a}
+    & \includegraphics[scale=0.4]{img/pacific_lr_hexbin.png}\fixedlabel{pacific_lr_hexbin}{1b} \\
+    2 & \includegraphics[scale=0.4]{img/eastern_lr_hexbin.png}\fixedlabel{eastern_lr_hexbin}{2a}
+    & \includegraphics[scale=0.4]{img/brasilia_lr_hexbin.png}\fixedlabel{brasilia_lr_hexbin}{2b} \\
+    3 & \includegraphics[scale=0.4]{img/tokyo_lr_hexbin.png}\fixedlabel{tokyo_lr_hexbin}{3a}
+    & \includegraphics[scale=0.4]{img/new_delhi_lr_hexbin.png}\fixedlabel{new_delhi_lr_hexbin}{3b} \\
+  \end{tabular}
+  \caption{Weekly Lesson Request Densities by Top 5 Timezone}
+  \label{figtab:lr_densities_tz}
+\end{table}
+
+We see densities of lesson requests in the span of the week as a function of
+timezone (Table \ref{figtab:lr_densities_tz}). We learn a couple of things from
+this visualization: 1) In general, most lessons start between 6 AM to 10 PM on
+the weekdays, and 2) timezone might be a good predictor of when people will
+take lessons. For example, compare Figures and \ref{pacific_lr_hexbin}
+\ref{brasilia_lr_hexbin} in Table \ref{figtab:lr_densities_tz} -- people taking
+lessons with Brasilia timezones tend to have most of their lessons happening
+around 7 PM, but those on Time tend to have most of their lessons at 9 AM and 3
+PM. Also, by the same token, Fridays are not as popular with people on Brasilia
+timezones than people on Pacific Time.
+
+\subsection{Algorithms and Techniques}
+
+Given that we know how many people will be taking lessons, what their lesson
+frequency is going to be for the month, and what their timezones are, my
+algorithm would output a projected number of lessons in each weekly schedule
+bucket (e.g. 0-4 local time, 4-8 local time, etc.).
+
+The algorithm is quite effective for how simple it is: for all the lessons that
+ever happened in the training data, put them all in a weekly schedule, and
+directly compute the probabilities that lessons would be requested for each bin
+(e.g. 0-4 local time, 4-8 local time, etc.). Then, for each business forecast,
+we filter the training data to only give us "relevant" information. For
+example, if we think that timezone is relevant, then for each business
+forecast, we bring up data from that timezone, and we calculate the probability
+that someone will take lessons during each of the schedule bins.  We then
+multiply that probability distribution by the number of students and the lesson
+frequency. We keep a tally of all the sums.
+
+For instance, let's say we get a business forecast that has 10 students, 2
+lessons a week, from Eastern (US \& Canada) time, and the training data shows
+that the probability of a lesson request happening for each bin, is as follows:
+$[0.1, 0.3, 0.1, 0.2, 0.3, 0.1]$. We multiply that by the number of students
+and by the number of lessons per week.  Therefore, we get $[0.1, 0.3, 0.1, 0.2,
+0.3, 0.1] \times 10 \times 2 = [2,6,2,4,5,2]$ respectively.
+
+To be more precise, however, we actually smooth out the probabilities by adding
+a uniform distribution of small values. So from our example, let's say a
+timezone has a distribution $S$ and we add uniform distribution $U$:
+
+\begin{equation}
+\frac{
+    \begin{array}[b]{r}
+      \left S = [ 0.10, 0.30, 0.10, 0.20, 0.30, 0.10 ]\\
+      + \left U = [ 0.01,0.01,0.01,0.01,0.01,0.01]
+    \end{array}
+  }{
+  \left S + U = [0.11, 0.31, 0.11, 0.21, 0.31, 0.11 \right.]
+  }
+\end{equation}
+
+We normalize it so that the sum is 1:
+
+\begin{align}
+\frac{
+    \begin{array}[b]{r}
+      \left S+U
+    \end{array}
+  }{
+\left \sum{(S + U)} \right.
+} &= \frac{
+    \begin{array}[b]{r}
+      \left [0.11, 0.31, 0.11, 0.21, 0.31, 0.11 \right.] \\
+    \end{array}
+  }{
+\left 1.16 \right.
+}\\
+&= [0.095, 0.267, 0.095, 0.181, 0.267, 0.095]
+\end{align}
+
+Then we multiply the normalized sum by the number of lessons from the forecast. So if there's 10 lessons projected for the timezone of interest, we multiply by 10:
+
+\begin{equation}
+\begin{split}
+  10 \times [0.095, 0.267, 0.095, 0.181, 0.267, 0.095] \\
+  = [0.95, 2.67, 0.95, 1.81, 2.67, 0.95]
+\end{split}
+\end{equation}
+
+Hence we expect about 1 lesson to happen for 0-4 local time, 2-3 lessons during
+4-8 local time, etc.
+
+The main point of adding the smoother (i.e. $[0.1, .... , 0.1]$) is to distrust
+the observed probabilities. For example, just because in our lifetime, we've
+observed that the sun rises every single day means that the probability that
+the sun will rise again is $100\%$ \cite{additive_smoothing}. We cannot be
+fully certain, so we think it's more like 99.99\% (close to $100\%$ but not
+$100\%$). Similarly, suppose we've observed that for a certain timezone with
+only a few lessons that no lessons ever happened from 0-4 AM -- it does not
+mean that the probability that a lesson will happen in the range of 0-4 AM is
+0.  Smoothing out the observed probabilities would probably smooth out our
+incomplete observations to match true probabilities.
+
+The advantage of this algorithm is its simplicity, speed, and interpretability.
+It is very simple and easy to understand, and its' predictions are quite fast,
+Also, its error is quite small in comparison to the benchmarks, which makes it
+a good candidate for the problem it is trying to solve.
+
+\subsection{Benchmark}
+
+For benchmarking purposes, I created two other models that were based on two
+hypotheses. First, I made a model that assumes that schedules are distributed
+equally (\emph{DumbModel}, Table \ref{tab:dumb}). Since we know from
+visualizations that wee hours of the morning are clearly not as likely as the
+other parts of the day (we also know that weekends are clearly not as popular
+as weekdays), we expect this model to perform poorly. It is a good to include
+as a benchmark, because we expect that our more complicated model should be
+leaps and bounds better than this.  Second, I created a model that assumes
+schedules are equally distributed in the range of hours when most people are
+active (\emph{SmartModel}, Table \ref{tab:smarter}). We expect that
+\emph{SmartModel} would be better than the dumb model, but we expect that our
+model to beat the other two by a significant margin due to the fact scheduling
+is not randomly distributed by any means.
+
+\begin{table}[]
+  \centering
+  \caption{Dumb Model: Assumes lesson requests (naively) start randomly anytime}
+  \label{tab:dumb}
   \begin{tabular}{|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|}
     \hline
                   & \textbf{Mon} & \textbf{Tue} & \textbf{Wed} & \textbf{Thu} & \textbf{Fri} & \textbf{Sat} & \textbf{Sun} \\
+    \hline
     \textbf{0:00} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
     \textbf{0:15} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
     \textbf{0:30} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
@@ -123,133 +462,270 @@ predict the 'current' month?
 
 \begin{table}[]
   \centering
-  \caption{ACT Model: Assumes lesson requests only start when people are generally awake}
-  \label{tab:act}
+  \caption{Smart Model: Assumes lesson requests only start when people are generally awake}
+  \label{tab:smarter}
   \begin{tabular}{|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|}
     \hline
                   & \textbf{Mon} & \textbf{Tue} & \textbf{Wed} & \textbf{Thu} & \textbf{Fri} & \textbf{Sat} & \textbf{Sun} \\
-    \textbf{0:00}    &. &. &. &. &. &. &.\\
-    \textbf{0:15}    &. &. &. &. &. &. &.\\
+    \hline
     \textbf{.}    &. &. &. &. &. &. &.\\
     \textbf{.}    &. &. &. &. &. &. &.\\
     \textbf{.}    &. &. &. &. &. &. &.\\
-    \textbf{7:45}    &. &. &. &. &. &. &.\\
-    \textbf{8:00} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
-    \textbf{8:15} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
+    \textbf{6:00} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
+    \textbf{6:15} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
     \textbf{.}    & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
     \textbf{.}    & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
     \textbf{.}    & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
-    \textbf{19:30} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
-    \textbf{19:45} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
-    \textbf{20:00} &. &. &. &. &. &. &.\\
-    \textbf{.}    &. &. &. &. &. &. &.\\
-    \textbf{.}    &. &. &. &. &. &. &.\\
-    \textbf{.}    &. &. &. &. &. &. &.\\
-    \textbf{23:30} &. &. &. &. &. &. &.\\
-    \textbf{23:45} &. &. &. &. &. &. &.\\
+    \textbf{23:30} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
+    \textbf{23:45} & \Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark &\Checkmark \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\section{Methodology}
+\subsection{Data Preprocessing}
+
+In order to create training and test sets, some data preprocessing had to
+occur. I transformed raw lesson request data into schedules. I took the first
+16 lesson requests of each person and discarded the rest (Table
+\ref{tab:example_1st_16_lesson_requests}). 16 was arbitrary -- it could have
+been smaller. These 16 lesson requests were then projected onto a weekly
+schedule. In the weekly schedule (Table
+\ref{tab:weekly_schedule_first_16_lrs:intermediary}), I looked for the highest
+frequency, which I then used to filter out ones that were less than or equal to
+half of the highest frequency (i.e. "noise", see Table
+\ref{tab:weekly_schedule_first_16_lrs:final}). Then, I labeled each schedule as
+being type 1 if there was only one weekly schedule lesson, 2 if there were two
+entries, etc. We classify the user schedule as belonging to a certain month
+based on when the first lesson request happened. Thus, User $1$ in our
+training/test data would be represented as data in Tables
+\ref{tab:user_summary:part_1} and \ref{tab:user_summary:part_2}.
+
+\begin{table}[]
+  \centering
+  \caption{Example First 16 Lesson Requests of a User}
+  \label{tab:example_1st_16_lesson_requests}
+  \begin{tabular}{lrr}
+    \hline
+     & \textbf{user\_id} & \textbf{lr\_start\_datetime} \\
+    \hline
+     1 & 1   & 2016-09-21 08:00:00-04:00 \\
+     2 & 1   & 2016-09-23 09:00:00-04:00 \\
+     3 & 1   & 2016-09-26 09:00:00-04:00 \\
+     . & .   & . \\
+     . & .   & . \\
+     . & .   & . \\
+     14 & 1   & 2016-09-26 08:30:00-04:00 \\
+     15 & 1   & 2016-09-26 09:00:00-04:00 \\
+     16 & 1   & 2016-09-26 09:00:00-04:00 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[]
+  \centering
+  \caption{Weekly Schedule of a User: Intermediary Step}
+  \begin{tabular}{|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|}
+    \hline
+                  & \textbf{Mon} & \textbf{Tue} & \textbf{Wed} & \textbf{Thu} & \textbf{Fri} & \textbf{Sat} & \textbf{Sun} \\
+    \textbf{8:00} &  2 & & & & & & \\
+    \textbf{8:15} &  & & & & & & \\
+    \textbf{8:30} &  4 & & & & & & \\
+    \textbf{8:45} &  & & & & & &\\
+    \textbf{9:00} &  & & 5& &5& &\\
+    \hline
+  \end{tabular}
+  \label{tab:weekly_schedule_first_16_lrs:intermediary}
+\end{table}
+
+
+\begin{table}[]
+  \centering
+  \caption{Weekly Schedule of a User: Final Step}
+  \begin{tabular}{|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|P{1cm}|}
+    \hline
+                  & \textbf{Mon} & \textbf{Tue} & \textbf{Wed} & \textbf{Thu} & \textbf{Fri} & \textbf{Sat} & \textbf{Sun} \\
+    \textbf{8:00} &  & & & & & & \\
+    \textbf{8:15} &  & & & & & & \\
+    \textbf{8:30} &  \Checkmark & & & & & & \\
+    \textbf{8:45} &  & & & & & &\\
+    \textbf{9:00} &  & & \Checkmark& &\Checkmark& &\\
+    \hline
+  \end{tabular}
+  \label{tab:weekly_schedule_first_16_lrs:final}
+\end{table}
+
+\begin{table}[]
+  \centering
+  \caption{Example User Summary: Part I}
+  \label{tab:user_summary:part_1}
+  \begin{tabular}{rrrrrrr}
+    \textbf{user\_id} & \textbf{l1\_day} & \textbf{l1\_time} & \textbf{l2\_day} & \textbf{l2\_time} & \textbf{l3\_day} &\textbf{l3\_time} \\
+    \hline
+    1 & 0 & 8.5 & 2 & 9.0 & 4 & 9.0 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[]
+  \centering
+  \caption{Example User Summary: Part II}
+  \label{tab:user_summary:part_2}
+  \begin{tabular}{rrrrrrr}
+    \textbf{start\_month} & \textbf{start\_year} & \textbf{schedule\_type}\\
+    \hline
+    9 & 2016 & 3\\
     \hline
   \end{tabular}
 \end{table}
 
 
-\subsubsection{Taming Complexity}
 
-One problem is that the space of possibilities of what we are essentially
-trying to predict (i.e. when a student will generally take lessons) is huge,
-relative to the feature space (of timezones and lesson frequency). This hurts
-our ability to predict when a specific student will precisely take lessons. The
-specifics of why this is are explained below.
 
-First, I will establish that the number of possible schedules could be quite
-huge. For example, a schedule consists of lesson requests in the context of a
-week. A lesson request has two dimensions: day of the week and start time.
-There are $7$ days of the week.  Day of the week ranges from $0-6$ ($0$ for
-Monday, $1$ for Tuesday, ..., $6$ for Sunday).  Start time is in $15$-minute
-increments -- thus, there are $24 \times 4 = 96$ possible start times.
-Therefore, a lesson in the context of a schedule could be represented as one of
-$7 \times 96 = 672$ possible values.  Thus, a $3$-lesson schedule could be one
-of potentially $672 \times 671 \times 670 = 303,464,448$ permutations.
+\subsection{Implementation}
 
-Contrast this with the relatively small hyperspace of predictors -- timezone
-and lesson frequency. There are $24$ timezones and $7$ schedule types (e.g.
-once a week, twice a week, three times a week, etc.) Thus there are only $24
-\times 5 = 120$ combinations of features, which is several orders of magnitude
-smaller than the space of schedules we are trying to predict.  Theoretically
-speaking, translating from low fidelity (predictors) to very high fidelity
-(schedules) could be very difficult. As an analogy, imagine transforming a
-pixelated low-resolution picture into a non-pixelated, high-resolution one --
-practically impossible to do, since we're trying to add information that we
-just don't have (Figure \ref{fig:mona}).
+\subsubsection{Challenges}
 
-\begin{figure}[h!]
-\centering
-\includegraphics[scale=0.75]{img/pixelmona.jpg}
-\caption{Clear vs. Pixelated Mona Lisa -- easy to transform from clear to pixelated, but not the other way around}
-\label{fig:mona}
-\end{figure}
+One issue was using company name as a predictor variable/feature.  I was hoping
+to examine whether or not knowing about a company could help us more accurately
+predict when that person will take lessons.  Perhaps some companies are more
+likely to take lessons during the morning than the evening as a function of
+work culture and positions (e.g. a tech company with mostly tech employees
+might have more flexibility as to when they take lessons than non-tech
+companies with non-tech employees).
 
-To simplify the problem of trying to figure out whether one model is better
-than another, we would bin the weekly schedule into smaller buckets: 0-4, 4-8,
-8-12, 12-16, 16-20, 20-0 UTC. Mapping $120$ combinations of features
-into only $6$ buckets becomes a much easier prediction problem.
+I tried to use it as a variable, however users are not associated with only one
+company in the system, so we are left with the problem of figuring out which
+company to assign to the user, which is difficult. Not solving for this problem
+would mean that in joining the \emph{lesson request} and \emph{company} SQL
+tables, lesson requests would be duplicated for users that are associated to
+more than one company, which would skew the results. Their lesson requests
+would have more representation than others' lesson requests, which might bias
+the model towards over-predicting lesson requests for those times which have
+lots of duplication and under-predicting lesson requests for the rest.
 
-\subsection{Metrics}
+For example, consider company A and company B. Let's say company A is
+``Twitter'' and B is ``TwitterGlobal". Basing on the naming convention, company
+A seems like it is going to be a subset of B (Figure
+\ref{fig:venn_a_subset_b}), but that does not seem to be the case -- they both
+have elements that are not present in the other (Figure
+\ref{fig:venn_a_and_b}).  What do we do with the people that they have in
+common? Do we just label them A? Or should they be B? Or do we label them as
+something else? Due to the time constraints, I decided to tackle this
+problem in the future as an enhancement.
 
-The error metric $e_b$ for bucket $b$ that we are trying to minimize is as follows:
-
-\begin{equation}
-  e_b = (y_{b} - \hat{y}_{b})^2
-\end{equation}
-
-where $y$ is actual and $\hat{y}$ is predicted.  More specifically, $y_{b}$
-is the actual number of lessons that belong to bucket $b$, $\hat{y}_{b}$ is
-the predicted number of lessons that belong to bucket $b$.
-
-The total error, considering each bucket, then is just the sum of the errors
-for each bucket.
-
-\begin{align}
-  Total Error &= \sum_{b=0}^{z}{e_b} \\
-              &= \sum_{b=0}^{z}{(y_{b} - \hat{y}_{b})^2}
-\end{align}
-
-where $z$ is the total number of buckets.
-
-We would like to be able to compare how much a prediction in one month compares
-against other months. The number of lessons from new students per month might
-vary considerably, as a function of the number of new students signing up, and
-the lesson frequency. Thus, for a certain month $m$, and model $a$, we could
-average out the total error by dividing by the number of lessons $n_m$, and get
-Mean Squared Error (MSE):
-
-\begin{align}
-  MSE(m,a) &= \frac{1}{n_m}\sum_{b=0}^{z}{(y_{(b,m)} - \hat{y}_{(b,m,a)})^2}\\
-\end{align}
-
-We would then measure how the models perform over time. We would split our data
-into months, and at any point in time, we would use the previous months to
-predict the "next" month (i.e. time series cross validation)\cite{tscv}. We would pick the
-model $g$ that best minimizes MSE on unseen test data over $o$ months:
-
-\begin{align}
-  g &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{MSE(m,a)} }{o}}\\
-    &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \frac{1}{n_m}\sum_{b=0}^{z}{(y_{(b,m)} - \hat{y}_{(b,m,a)})^2} } }{o}}\\
-\end{align}
-
-\section{Analysis}
-
-\subsection{Data Exploration}
+Another issue was using legacy code as benchmark. There exists code that helps
+predict student demand. I would have loved to use the code to see how it
+performs against my model. However, code for it is not maintained and is hard
+to understand, and the engineer who wrote it is no longer with us. Given time
+constraints, I chose not to go through with the comparison.
 
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=0.75]{img/2x_cluster_0_out_of_19.png}
-\caption{The Universe}
-\label{fig:univerise}
+\includegraphics[scale=0.05]{img/venn_a_subset_b.png}
+\caption{Company A is a subset of Company B}
+\label{fig:venn_a_subset_b}
 \end{figure}
 
-\subsection{Conclusion}
-lol
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=0.1]{img/venn_a_and_b.jpg}
+\caption{Company A is not a subset of Company B}
+\label{fig:venn_a_and_b}
+\end{figure}
+
+Was there any part of the code (challenging functions) that should be
+documented?
+
+\subsection{Refinement}
+
+Several ways were attempted to improve the performance of the algorithm.
+First, I performed feature selection and created submodels: \emph{Timezone
+Only}, \emph{Lesson Frequency Only}, \emph{Lesson Frequency \& Timezone}. It
+turned out that \emph{user\_tz} was the best predictor out of the two variables
+over several months.
+
+Once I had the \emph{timezone-only} model, I wanted to see if I could even
+improve the performance of the algorithm. Recall that a smoothing function was
+applied to the predictions, which is especially helpful when the model has not
+seen a particular input. I divided the training set into a sub-training set and
+a validation set; sub-training set provides us prior probabilities of the
+scheduling bins. Validation set (3 months) is what we use to optimize the prior
+probabilities. Our hope is that the optimized model would perform better on the
+test data than just using the simpler model.
+
+\section{Results}
+
+\subsection{Model Evaluation and Validation}
+
+Over the months of timezone-only \emph{TimezoneProbModel} model did the best.
+Second was the model using timezone with optimization \emph{TimezoneProbModel}.
+Third was the model that did no filtering based on timezone nor lesson
+frequency probability distributions (\emph{GeneralProbModel}). Fourth was  the
+lesson frequency-only model \emph{LFProbModel}.  Fifth was the model that
+filtered for both timezone and lesson frequency (\emph{LFTProbModel}). The last
+two models were the benchmarks (\emph{SmartHeuristicModel} and
+\emph{DumbModel}). See Table \ref{tab:avg_mae_of_models} and Figure
+\ref{fig:mae_models} for details.
+
+\begin{table}[]
+  \centering
+  \caption{Average Mean Absolute Errors (12 months)}
+  \label{tab:avg_mae_of_models}
+  \begin{tabular}{rr}
+    \textbf{model} & \textbf{average MAE over 12 months} \\
+    \hline
+    TimezoneProbModel &            6.467433 \\
+    OptimizedTimezoneProbModel &   6.824317 \\
+    GeneralProbModel &             6.893402 \\
+    LFProbModel &                  7.023239 \\
+    LFTProbModel &                 7.887060 \\
+    SmartHeuristicModel &         12.062500 \\
+    DumbModel &                   23.046296 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=0.8]{img/mae_models.png}
+\caption{Mean Absolute Errors over 12 months}
+\label{fig:mae_models}
+\end{figure}
+
+It was not surprising that \emph{TimezoneProbModel} did the best. Chi-square
+test in which time is broken down to morning and evening shows support that on
+average it generally does not matter which timezone you come from. That is why
+the \emph{GeneralProbModel} performs close to it. However, looking at the
+Chi-square results one could see that a few look heavily skewed toward the
+morning or the evening. Thus, for those environments, timezone does matter, so
+timezone performs slightly better.
+
+Also makes sense that the \emph{OptimizedTimezoneProbModel} did slightly
+worse -- the added complexity might have made the model pick up some noise.
+
+
+
+\subsection{Justification}
+
+\section{Conclusion}
+\subsection{Free-Form Visualization}
+\subsection{Reflection}
+\subsection{Improvement}
+
+This project, as described before, is supposed to be part of an end-to-end
+system that would help forecast how many more teachers we need to hire in the
+future. It would greatly be enhanced once the remaining parts of the system are
+built, such as having an accurate model of what the business forecast would be
+like (i.e. when business people say they think 50 students from Pacific
+Timezone are going to join next month, we should also consider organic growth
+(and churn) for that timezone and others). That would help create an accurate
+business forecast, which would then be fed to the model to generate student
+demand. Similarly, another thing that would improve this project is if the
+student demand forecast is then connected with the recommender algorithm so we
+could run simulations on when we think teachers would be needed next.
 
 \bibliographystyle{plain}
 \bibliography{references}
+
 \end{document}
