@@ -4,6 +4,7 @@ from weekly_lessons import WeeklyLesson
 from timezone import Timezone
 from bins import Bins
 
+# TODO: make sure that ActualSchedule implements methods of Schedule?
 class ActualSchedule():
     def __init__(self, data_df):
         self._data_df = data_df

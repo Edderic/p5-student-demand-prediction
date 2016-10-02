@@ -4,7 +4,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../', 'code'))
 
 from specter import Spec, expect
 
-from models import DumbModel, ProbModel, SmartHeuristicModel
+from models import DumbModel, GeneralProbModel, SmartHeuristicModel
 
 class ModelsSpec(Spec):
     class prob_model(Spec):
@@ -36,10 +36,10 @@ class ModelsSpec(Spec):
                          'user_tz': 'Pacific (US & Canada)',
                          'frequency': 2 }]
 
-                model = ProbModel()
+                model = GeneralProbModel()
 
                 model.fit(training_data)
-                p = model.predict(business_forecast, num_simulations=10)
+                p = model.predict(business_forecast)
                 expect(True).to.equal(True)
 
             def handles_predicting_cases_it_has_not_seen_before(self):
@@ -69,10 +69,10 @@ class ModelsSpec(Spec):
                          'user_tz': 'Pacific (US & Canada)',
                          'frequency': 2 }]
 
-                model = ProbModel()
+                model = GeneralProbModel()
 
                 model.fit(training_data)
-                p = model.predict(business_forecast, num_simulations=10)
+                p = model.predict(business_forecast)
 
                 expect(True).to.equal(True)
 
@@ -144,5 +144,5 @@ class ModelsSpec(Spec):
                          'timezone': 'Pacific (US & Canada)',
                          'frequency': 2 }]
 
-                p = dumb_model.predict(business_forecast, num_simulations=10)
-                expect(p[0] + p[1] + p[2] + p[3] + p[4] + p[5]).to.equal(8)
+                p = dumb_model.predict(business_forecast)
+                expect(round(p[0] + p[1] + p[2] + p[3] + p[4] + p[5])).to.equal(8)

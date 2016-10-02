@@ -40,7 +40,6 @@ class BackTestSpec(Spec):
 
             bt = BackTest(data=summaries,
                     model=DumbModel,
-                    num_simulations=10,
                     training_data_span_months=2)
             error = bt.errors()
             expect('2016-6' not in error.index.values).to.equal(True)
@@ -69,7 +68,6 @@ class BackTestSpec(Spec):
 
         bt = BackTest(data=summaries,
                 model=DumbModel,
-                num_simulations=10,
                 training_data_span_months=1)
         error = bt.errors()
         expect('2016-8' in error.index.values).to.equal(True)
