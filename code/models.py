@@ -8,15 +8,8 @@ from backtest import BackTest
 from validation import Validation
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from scipy.optimize import minimize
+import math
 
-
-# TODO: experiment with the performance. Might wanna try averaging out as well.
-# Might help out a lot when we are trying to predict when we have a very small
-# sample for each group
-
-class OptimizedModel():
-    def fit(self, training_data):
-        self.training_data = training_data
 class Model(object):
     def num_business_forecast_lessons(self, business_forecast):
         lesson_count_business_forecast = 0
@@ -27,6 +20,60 @@ class Model(object):
             lesson_count_business_forecast += i['frequency'] * i['schedule_type']
 
         return lesson_count_business_forecast
+
+
+# Interpolates between GeneralProbModel and TimezoneProbModel as function of
+# sample size. If the sample size is really small, weight the
+# GeneralProbModel's predict more. If the sample size is big enough, weight the
+# TimezoneProbModel more. If in between,
+
+class InterpolatedProbModel(Model):
+    def fit(self, training_data):
+        # self.training_data = training_data
+        self.validation = Validation(training_data)
+        self.training_data = training_data
+        self.x_offset = 80.0
+        self.x_divisor = 25.0
+
+    def predict(self, business_forecast, training_data=pd.DataFrame()):
+        sum_bins = np.zeros(6)
+
+        for i in business_forecast:
+            gpm = GeneralProbModel()
+            gpm.fit(self.training_data)
+            gpm_prediction = gpm.predict([i])
+
+            tpm = TimezoneProbModel()
+            tpm.fit(self.training_data)
+            tpm_prediction = tpm.predict([i], training_data=self.training_data)
+
+            tmp = self.timezone_model_probability(\
+                    self.training_data[self.training_data.user_tz == i['user_tz']\
+                    ].shape[0])
+
+            sum_bins += gpm_prediction * (1 - tmp) + tpm_prediction * tmp
+
+        return sum_bins
+
+    #private
+    def timezone_model_probability(self, sample_size):
+        stuff = (sample_size - self.x_offset) / self.x_divisor
+        return 1.0 / (1 + math.exp(-stuff))
+
+    # def size(self):
+        # return self.validation.size()
+
+    # def num_months(self):
+        # return self.validation.num_months()
+
+    # def training_data(self, *args):
+        # return self.validation.training_data(*args)
+
+    # def year_month_index(self, *args):
+        # return self.validation.year_month_index(*args)
+
+    # def test_data(self, *args):
+        # return self.validation.test_data(*args)
 
 
 class GeneralProbModel(Model):
@@ -83,24 +130,6 @@ class GeneralProbModel(Model):
     def masks_dict(self):
         return { 'user_tz': 'user_tz', 'schedule_type': 'schedule_type'}
 
-# class TimezoneProbModel(GeneralProbModel):
-    # features=['user_tz']
-#
-    # def masks_to_store(self):
-        # return ['s']
-    # def masks(self, business_forecast):
-        # truth = False
-        # for item in self.features:
-            # truth = truth | (self.training_data[item] == business_forecast[item])
-        # return truth
-#
-    # def filtered_training_data(self, business_forecast):
-        # _masks = False
-        # for i in business_forecast:
-            # _masks = _masks | self.masks(i)
-#
-        # return self.training_data[_masks]
-
 class LFTProbModel():
     def fit(self, training_data):
         self.training_data = training_data
@@ -138,7 +167,6 @@ class TimezoneProbModel():
         # self.validation = Validation(training_data)
         self._training_data = training_data
         self.smoother = np.array([0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
-
 
         # get validation set
         # optimize the smoother using validation set
