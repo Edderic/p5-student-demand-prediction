@@ -25,7 +25,7 @@
 \author{        Edderic Ugaddan \\
                 Lingo Live
 }
-\date{September 2016}
+\date{October 2016}
 
 
 
@@ -115,29 +115,30 @@ weakspots of the model that we could improve on in the future.
 
 To simplify the problem of trying to figure out whether one model is better
 than another, we would bin the weekly schedule into smaller buckets: 0-4, 4-8,
-8-12, 12-16, 16-20, 20-0 local time. This was done because the possibilities of
-when a user would take lessons is quite big (could be in the hundred millions)
-relative to the sample size (which is $1,500$). Mapping $120$ combinations of
-features into only $6$ buckets becomes a much easier prediction problem.
+8-12, 12-16, 16-20, 20-0 local time. We don't really care much about whether or
+not we predict when someone exactly takes lessons -- we only care about when
+someone generally takes lessons. Binning the prediction and actual schedules
+into $6$ buckets helps us figure out when someone \emph{generally} takes lessons.
 
 \subsection{Metrics}
 
 The error metric $e_b$ for bucket $b$ that we are trying to minimize is as follows:
 
 \begin{equation}
-  e_b = \lvert y_{b} - \hat{y}_{b} \rvert
+  e_b = \lvert y_{b} - \hat{y}_{b}(a) \rvert
 \end{equation}
 
-where $y$ is actual and $\hat{y}$ is predicted.  More specifically, $y_{b}$
-is the actual number of lessons that belong to bucket $b$, $\hat{y}_{b}$ is
-the predicted number of lessons that belong to bucket $b$.
+where $y$ is actual and $\hat{y}$ is predicted, and $a$ is a model.  More
+specifically, $y_{b}$ is the actual number of lessons that belong to bucket
+$b$, $\hat{y}_{b}$ is the predicted number of lessons that belong to bucket
+$b$.
 
 The total error, considering each bucket, then is just the sum of the errors
 for each bucket.
 
 \begin{align}
   Total Error &= \sum_{b=0}^{z}{e_b} \\
-              &= \sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert}
+  &= \sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b}(a) \rvert}
 \end{align}
 
 where $z$ is the total number of buckets.
@@ -150,7 +151,7 @@ average out the total error by dividing by the number of bins $x$, and get
 the Mean Absolute Error (MAE):
 
 \begin{align}
-  MAE(m,a) &= \frac{1}{x}\sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert}\\
+  MAE(m,a) &= \frac{1}{x}\sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b}(a) \rvert}\\
 \end{align}
 
 We would then measure how the models perform over time. We would split our data
@@ -160,16 +161,14 @@ model $g$ that best minimizes MAE on unseen test data over $o$ months:
 
 \begin{align}
   g &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{MAE(m,a)} }{o}}\\
-    &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \frac{1}{x}\sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert} } }{o}}\\
-    &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b} \rvert} } }{xo}}\\
+  &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \frac{1}{x}\sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b}(a) \rvert} } }{o}}\\
+  &= \argmin_{a}{\frac{ \sum_{m=0}^{o}{ \sum_{b=0}^{z}{\lvert y_{b} - \hat{y}_{b}(a) \rvert} } }{xo}}\\
 \end{align}
 
 MAE was chosen over other metrics (such as Mean Squared Error, MSE) because it is
 very intuitive -- the metric is in the same units as what we are trying to
 predict (i.e. number of lessons), so is definitely helpful in terms of
-interpretability. Interpretability is very important in our environment since
-other engineers would most likely add changes or enhancements in the future,
-so MAE was deemed to be a good enough metric.
+interpretability.
 
 \section{Analysis}
 
@@ -634,49 +633,37 @@ constraints, I chose not to go through with the comparison.
 \label{fig:venn_a_and_b}
 \end{figure}
 
-Was there any part of the code (challenging functions) that should be
-documented?
-
 \subsection{Refinement}
 
 Several ways were attempted to improve the performance of the algorithm.
-First, I performed feature selection and created submodels: \emph{Timezone
-Only}, \emph{Lesson Frequency Only}, \emph{Lesson Frequency \& Timezone}. It
-turned out that \emph{user\_tz} was the best predictor out of the two variables
-over several months.
-
-Once I had the \emph{timezone-only} model, I wanted to see if I could even
-improve the performance of the algorithm. Recall that a smoothing function was
-applied to the predictions, which is especially helpful when the model has not
-seen a particular input. I divided the training set into a sub-training set and
-a validation set; sub-training set provides us prior probabilities of the
-scheduling bins. Validation set (3 months) is what we use to optimize the prior
-probabilities. Our hope is that the optimized model would perform better on the
-test data than just using the simpler model.
+First, I performed feature selection and created submodels: timezone only
+(\emph{TimezoneProbModel}), lesson frequency only (\emph{LFProbModel}), lesson
+frequency and timezone (\emph{LFTProbModel}). It turned out that
+\emph{user\_tz} was the best predictor out of the two variables over several
+months. Using lesson frequency by itself, and using lesson frequency in
+combination with timezone resulted in a slightly less performant model.
+\emph{GeneralProbModel}, which does not take into account either variables when
+fine-tuning its training data, was also created. It performs slightly worse
+than \emph{TimezoneProbModel}, but better than the other models. I was quite
+convinced with using \emph{TimezoneProbModel} as the final model, but thanks to
+sensitivity analysis (discussed at the Results section), I discovered a flaw.
+It was mitigated by generating a meta model that makes use of both
+\emph{TimezoneProbModel} and \emph{GeneralProbModel} predictions. More of this
+is discussed below.
 
 \section{Results}
 
-\subsection{Model Evaluation and Validation}
-
-Over the months of timezone-only \emph{TimezoneProbModel} model did the best.
-Second was the model using timezone with optimization \emph{TimezoneProbModel}.
-Third was the model that did no filtering based on timezone nor lesson
-frequency probability distributions (\emph{GeneralProbModel}). Fourth was  the
-lesson frequency-only model \emph{LFProbModel}.  Fifth was the model that
-filtered for both timezone and lesson frequency (\emph{LFTProbModel}). The last
-two models were the benchmarks (\emph{SmartHeuristicModel} and
-\emph{DumbModel}). See Table \ref{tab:avg_mae_of_models} and Figure
-\ref{fig:mae_models} for details.
+\subsection {Model Evaluation and Validation}
 
 \begin{table}[]
   \centering
-  \caption{Average Mean Absolute Errors (12 months)}
+  \caption{Average Mean Absolute Errors (11 months)}
   \label{tab:avg_mae_of_models}
   \begin{tabular}{rr}
     \textbf{model} & \textbf{average MAE over 12 months} \\
     \hline
     TimezoneProbModel &            6.467433 \\
-    OptimizedTimezoneProbModel &   6.824317 \\
+    InterpolatedProbModel &        6.607820 \\
     GeneralProbModel &             6.893402 \\
     LFProbModel &                  7.023239 \\
     LFTProbModel &                 7.887060 \\
@@ -686,6 +673,16 @@ two models were the benchmarks (\emph{SmartHeuristicModel} and
   \end{tabular}
 \end{table}
 
+Over 11 months of test data (2015-09 to 2016-08), \emph{TimezoneProbModel}
+performed the best (See Figure \ref{fig:mae_models} and Table
+\ref{tab:avg_mae_of_models} for details; please note that only the benchmarks
+and the best performing ones were kept to keep the graph from being cluttered).
+It is not surprising -- looking at Table \ref{figtab:lr_densities_tz}, one
+could see that timezone does carry information that helps us predict when a
+student would take lessons. However, after doing sensitivity analysis, I
+quickly learned that the model itself has a big weakness -- predicting
+schedules of timezones it hasn't seen.
+
 \begin{figure}[h!]
 \centering
 \includegraphics[scale=0.8]{img/mae_models.png}
@@ -693,24 +690,311 @@ two models were the benchmarks (\emph{SmartHeuristicModel} and
 \label{fig:mae_models}
 \end{figure}
 
-It was not surprising that \emph{TimezoneProbModel} did the best. Chi-square
-test in which time is broken down to morning and evening shows support that on
-average it generally does not matter which timezone you come from. That is why
-the \emph{GeneralProbModel} performs close to it. However, looking at the
-Chi-square results one could see that a few look heavily skewed toward the
-morning or the evening. Thus, for those environments, timezone does matter, so
-timezone performs slightly better.
+Consider the scenario when a timezone we don't have much experience with (i.e.
+sample size for the given timezone is very low). For example, at the time of
+this writing, we only have one user schedule that has "Adelaide" as the
+timezone. In my sensitivity analysis (\emph{code/sensitivity\_analysis.py}), I
+created fake data to simulate predicting when lesson requests would happen from
+an underrepresented timezone.  Specifically, I cloned data from one of the
+previous months, labeled the clone as belonging to the under-represented
+timezone (Adelaide).  I also then cloned the fake data (labeled as belonging to
+Adelaide) for the next month after that. Again, the goal is to see how well
+\emph{TimezoneProbModel} the robustness of the model. Not surprisingly, the
+errors were huge -- by default, \emph{TimezoneProbModel} smooths out observed
+probabilities, and when observed probabilities are zero (or close to zero),
+smoothing them out will lead to a random 'flat' distribution, essentially
+making a guess that even wee hours in the morning are as equally likely to have
+lessons than other 'normal' times -- which we know is not the case.
 
-Also makes sense that the \emph{OptimizedTimezoneProbModel} did slightly
-worse -- the added complexity might have made the model pick up some noise.
+To remedy this problem, I decided to create \emph{InterpolatedProbModel}, a new
+model that interpolates between \emph{TimezoneProbModel} and
+\emph{GeneralProbModel}. The latter assumes that it does not matter what
+timezones people are coming from. When it gets a business forecast, it discards
+timezone and uses information from all students' schedules -- not just
+students' schedules that belong to the timezone of interest. It performs
+slightly worse than \emph{TimezoneProbModel}, but it is still much better than
+the two benchmarks, and it is able to handle underrepresented cases pretty
+well. On fake unseen data I created, interpolation decreased error (compared to
+\emph{TimezoneProbModel}) by about 89.6\% (from 172.88 to 17.95 MAE). After
+cloning the unseen data again, \emph{InterpolatedProbModel} is able to take
+advantage of \emph{TimezoneProbModel}'s more targeted approach (17.95 to 0.65
+MAE), which shows the robustness and adaptability of the model (Table
+\ref{tab:model_perf_underrepresented}).
+
+\begin{table}[]
+  \centering
+  \caption{Model Performance on Underrepresented, Unseen Data}
+  \label{tab:model_perf_underrepresented}
+  \begin{tabular}{rrr}
+    \textbf{model name} & \textbf{MAE on fake\_data\_1} & \textbf{MAE on fake\_data\_2} \\
+    \hline
+    GeneralProbModel & 13.319845 & 11.728293 \\
+    InterpolatedProbModel & 17.947195 & 0.645111 \\
+    TimezoneProbModel & 172.883495 & 0.676617 \\
+    \hline
+  \end{tabular}
+\end{table}
 
 
+
+
+
+The general idea of interpolation is the following.  When sample size for a
+given timezone is small, weight the prediction of \emph{GeneralProbModel} more
+heavily. When sample size is big enough, weight the prediction of
+\emph{TimezoneProbModel} much more than \emph{GeneralProbModel}. If sample size
+is not big enough, but not too small either, we weight the prediction of the
+two models more equally.
+
+Given the sample size of the timezone of interest, we pass that into a sigmoid
+function to determine the weighting for each of the two models:
+
+\begin{align}
+  \text{TimezoneProbModel weight} = \frac{1}{1+e^{-\frac{x-80}{25}}}
+\end{align}
+
+where \emph{x} is the sample size of the given timezone of the business
+forecast\cite{sigmoid_func}. This sigmoid function has the useful property of
+outputting a weight between 0 and 1 (both inclusive). Figure
+\ref{fig:sig_func_adjusted_for_interp} shows an example sigmoid function that
+could be used for this problem:
+
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=1]{img/special_sigmoid_func.png}
+\caption{Sigmoid Function adjusted for interpolating between models}
+\label{fig:sig_func_adjusted_for_interp}
+\end{figure}
+
+So when the lesson request sample size for the timezone of interest is close to
+zero, \emph{TimezoneProbModel} is weighted weakly. However when the sample size
+goes toward infinity, the weighting for \emph{TimezoneProbModel} approaches 1.
+At the halfway point (i.e. where the timezone of interest has 80 lesson
+requests in the training set), both \emph{TimezoneProbModel} and
+\emph{GeneralProbModel} are weighted equally.  The parameters of the sigmoid
+function were chosen by running an optimizer. In code, they are labeled
+\emph{x\_offset} and \emph{x\_divisor}. \emph{x\_offset} directly affects where
+the cut-off is, and \emph{x\_divisor} directly affects the smoothness of the
+transition between two models. Values for \emph{x\_divisor} ranged from 1 to
+50, while values for \emph{x\_offset} ranged from 100 to 150, depending on what
+was in the training set.
+
+Timezone carries information that could help predict when lessons will occur.
+The caveat is when sample size is small -- we cannot trust the predictions of
+\emph{TimezoneProbModel}. However, blending it with \emph{GeneralProbModel} via
+\emph{InterpolatedProbModel} gives us the best of both worlds -- a model that
+is robust and makes good predictions on under-represented data, yet it is also
+a model that improves its predictions via the use of more relevant variables
+once sample size increases.
 
 \subsection{Justification}
 
+In terms of average MAE, \emph{InterpolatedProbModel} presents a 71.3\%
+improvement over \emph{DumbModel} and a 45.2\% improvement over
+\emph{SmartHeuristicModel}, quite strong results compared to the two
+benchmarks. As discussed before, interpolation decreased error (compared to
+\emph{TimezoneProbModel}) by about 89.6\% on the example of unseen fake data
+(Table \ref{tab:model_perf_underrepresented}), making it quite robust.
+
+To get an intuitive sense of whether the \emph{InterpolatedProbModel} is
+significant enough to have solved the problem, we could look at the predictions
+on test data (Table \ref{tab:interpolated_bin_errors_over_months}). On this
+table, the biggest errors (over- and under-estimates) were highlighted, and the
+biggest of them all is about 30 lessons. Is being 30 lessons off a big problem?
+
+In terms of hours, 30 lessons is equivalent to the following: 30 lessons
+$\times$ 45 minutes per lesson $\times$ 1 hour per 60 minutes $ = 22.5$ hours.
+On average, disregarding outliers, a task-based learning (TBL) teacher wants
+20.79 hours per week (See Table \ref{tab:teacher_desired_hours} for teacher
+desired hours). I think on average, one TBL teacher should be enough. I would
+conservatively add 1 or 2 more teachers, just in case the lessons requested are
+supposed to happen simultaneously (as opposed to being spread out).
+
+How likely is this scenario? Given knowledge of how our predictions did on test
+data, I'd say not very likely. There have been 66 bin predictions made ($11$
+months $\times$ 6 bins per month). Five of those bins were off by at least 15
+lessons. Thus, I claim that the probability of being off by at least 15 lessons
+is about $5/66 = 9.09\%$, which is quite low. I would say that
+\emph{InterpolatedProbModel} is a significant solution to the problem of
+predicting student demand.
+
+\begin{table}[]
+  \caption{InterpolatedProbModel Bin Errors By Month}
+  \centering
+  \label{tab:interpolated_bin_errors_over_months}
+  \begin{tabular}{lrrrrrrr}
+    \toprule
+    \textbf{time} & \textbf{0-4}& \textbf{4-8}& \textbf{8-12}& \textbf{12-16}& \textbf{16-20}& \textbf{20-24}&  \textbf{ss} \\
+    \midrule
+    \hline
+    2015-9  &  -2.34 &   5.85 &   9.80 &  -7.31 &  -6.23 &   0.23 &        125.0 \\
+    2015-10 &   1.38 &   2.81 & -11.80 &   1.21 &   1.33 &   5.07 &        120.0 \\
+    2015-11 &  -0.18 &  -2.11 &  -7.45 &   6.61 &  -1.32 &   4.45 &         55.0 \\
+    2015-12 &   3.88 &   0.41 & \textbf{-30.56} & \textbf{-17.63} &  \textbf{33.26} &  10.64 &        199.0 \\
+    2016-1  &  -1.23 &   2.29 & -10.74 &  -1.65 &   5.44 &   5.89 &        137.0 \\
+    2016-2  &   2.30 &  -3.16 &   8.12 &   2.12 &  -3.95 &  -5.42 &        141.0 \\
+    2016-3  &   4.02 &  \textbf {20.75 } & \textbf{-27.48 } &   8.47 &  12.10 & \textbf{-17.85} &        485.0 \\
+    2016-4  &   1.49 &   5.10 &  -6.30 &  -5.05 &  -4.39 &   9.16 &        119.0 \\
+    2016-5  &   1.47 &   5.14 & -10.65 &   0.89 &   5.89 &  -2.73 &        120.0 \\
+    2016-6  &   1.25 &   4.08 &  11.51 &  -4.27 & -10.48 &  -2.08 &        173.0 \\
+    2016-7  &  -0.86 &   9.87 &  -4.15 &  -1.34 &   6.79 & -10.32 &        548.0 \\
+    2016-8  &  -2.69 &   4.44 &   5.90 & -10.91 &  -5.25 &   8.51 &        239.0 \\
+    \hline
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[]
+  \caption{Task-Based Learning Teacher Desired Hours}
+  \centering
+  \label{tab:teacher_desired_hours}
+  \begin{tabular}{rrr}
+    \toprule
+    \textbf{desired hours} & \textbf{desired hours} & \textbf{desired hours} \\
+    \midrule
+    \hline
+    -30 & 16 & 30 \\
+    0   & 17 & 30 \\
+    5   & 18 & 32 \\
+    6   & 20 & 35 \\
+    6   & 20 & 35 \\
+    6   & 20 & 40 \\
+    8   & 20 & 40 \\
+    10  & 20 & 40 \\
+    10  & 20 & 45 \\
+    10  & 20 & 50 \\
+    10  & 20 & NaN\\
+    10  & 20 & NaN\\
+    10  & 23 & NaN\\
+    10  & 24 & NaN\\
+    11  & 25 & NaN\\
+    12  & 25 & NaN\\
+    12  & 25 & NaN\\
+    15  & 25 & NaN\\
+    15  & 25 & NaN\\
+    15  & 25 & NaN\\
+    15  & 25 & NaN\\
+    15  & 28 & NaN\\
+    15  & 30 & NaN\\
+    15  & 30 & NaN\\
+    15  & 30 & NaN\\
+    15  & 30 & NaN\\
+    15  & 30\\
+    15  & 30\\
+    16  & 30\\
+    16  & 30\\
+    \hline
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
+
 \section{Conclusion}
 \subsection{Free-Form Visualization}
+
+The visualization I chose is the error surfaces of the different models:
+\emph{InterpolatedProbModel}, \emph{TimezoneProbModel},
+\emph{GeneralProbModel}, \emph{LFProbModel}, and the two benchmarks
+\emph{SmartHeuristicModel} and \emph{DumbModel} (See Table
+\ref{figtab:error_surfaces}). Pay attention to the contour maps -- sections of
+the surface that are close to zero are marked gray; ones that overestimate are
+orange/red, but ones that underestimate are light blue/dark blue. A good model
+in general would have less blue and orange areas.
+
+Out of all the options shown, \emph{InterpolatedProbModel} seems to have the
+least amount of blue/orange areas, so it's predictions in general are more spot
+on than other models. \emph{GeneralProbModel}, for example, has a bunch more
+orange spots, which means that it's overestimating more on average a bunch of
+sections than \emph{InterpolatedProbModel}.
+
+We could also see that the chosen model, \emph{InterpolatedProbModel}, is much
+better (smoother) than the benchmarks\emph{SmartHeuristicModel} and
+\emph{DumbModel}, judging by the jagged shapes -- these stalactites are huge
+signs of underestimation.
+
+Another visualization that provides evidence of \emph{InterpolatedProbModel}
+being a good model is the error bars (Table \ref{figtab:error_bars}). One can
+see that the errors for each bin, on average, are quite close to zero,
+specially when compared to the two benchmarks (\emph{SmartHeuristicModel} and
+\emph{DumbModel}). On average, the two benchmarks tend to severely over- and
+under-estimate unlike \emph{InterpolatedProbModel}. The errors also have a much
+smaller standard deviation than the benchmarks.
+
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{c@{\quad}ccc}
+    & a & b \\
+    1 & \includegraphics[scale=0.35]{img/error_surf_interpolated_prob_model.png}\fixedlabel{error_surf_interpolated_prob_model}{1a}
+    & \includegraphics[scale=0.35]{img/error_surf_timezone_prob_model.png}\fixedlabel{error_surf_timezone_prob_model}{1b} \\
+    2 & \includegraphics[scale=0.35]{img/error_surf_general_prob_model.png}\fixedlabel{error_surf_general_prob_model}{2a}
+    & \includegraphics[scale=0.35]{img/error_surf_lf_prob_model.png}\fixedlabel{error_surf_lf_prob_model}{2b} \\
+    3 & \includegraphics[scale=0.35]{img/error_surf_smart_heuristic_model.png}\fixedlabel{error_surf_smart_heuristic_model}{3a}
+    & \includegraphics[scale=0.35]{img/error_surf_dumb_model.png}\fixedlabel{error_surf_dumb_model}{3b} \\
+  \end{tabular}
+  \caption{Error Surfaces of Different Models}
+  \label{figtab:error_surfaces}
+\end{table}
+
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{c@{\quad}ccc}
+    & a & b \\
+    1 & \includegraphics[scale=0.35]{img/error_bars_interpolated_prob_model.png}\fixedlabel{error_bars_interpolated_prob_model}{1a}
+    & \includegraphics[scale=0.35]{img/error_bars_timezone_prob_model.png}\fixedlabel{error_bars_timezone_prob_model}{1b} \\
+    2 & \includegraphics[scale=0.35]{img/error_bars_general_prob_model.png}\fixedlabel{error_bars_general_prob_model}{2a}
+    & \includegraphics[scale=0.35]{img/error_bars_lf_prob_model.png}\fixedlabel{error_bars_lf_prob_model}{2b} \\
+    3 & \includegraphics[scale=0.35]{img/error_bars_smart_heuristic_model.png}\fixedlabel{error_bars_smart_heuristic_model}{3a}
+    & \includegraphics[scale=0.35]{img/error_bars_dumb_model.png}\fixedlabel{error_bars_dumb_model}{3b} \\
+  \end{tabular}
+  \caption{Error Bars of Different Models}
+  \label{figtab:error_bars}
+\end{table}
+
 \subsection{Reflection}
+
+In this project, I was able to create a model that predicts when students will
+be taking lessons pretty well, given that we have information on their actual
+lesson frequency and the timezones that they came from. The model is
+essentially an ensemble of two submodels: \emph{GeneralProbModel} and
+\emph{TimezoneProbModel}. When asked to predict when a student will be taking
+lessons, the first makes a prediction without paying attention to the what the
+timezone is. The training set consists of schedules without any care about
+timezone, which has the benefit of being robust in predicting schedules of a
+"new" timezone. On the other hand, the latter does make extensive use of
+timezone when predicting when students will be taking lessons and generally
+gets better results than the former -- it assumes that people in one timezone
+might not be having the same scheduling patterns as others. The problem with
+this approach, however, is when the model encounters unseen data (i.e. from a
+"new" timezone). When the sample size is really low (e.g. 0), it's guess is
+basically random, which we know performs poorly.  Thus, in this project, the
+final model is one that interpolates between two models depending on sample
+sizes of the different timezones based on the business forecast. This gives us
+the best of both worlds.
+
+One interesting thing I learned about this project is the Law of Diminishing
+Returns. In the fitting step of \emph{InterpolatedProbModel}, I wanted to
+figure out if there's an optimal cut-off point between the two models, and how
+"soft" or "hard" the cut-off would be. To do so, the training data was
+subdivided into two groups: sub-training and validation.  Sub-training data was
+used to predict error on the validation set, which is the three most-recent
+months in the training set. Then, I used an optimizer for a number of
+iterations to find the best cut-off, which took several hours. What I optimized
+for is the mean absolute error multiplied by the standard deviation of the
+signed error of the bins. It improved the error-surface by a little bit (Table
+\ref{figtab:error_surfaces}). Again, the error surface has more gray areas,
+indicating that in a lot of predictions, the error is close to zero.  What I
+found was that the cut-off ranged between about 100 and 150, and that it also
+varied from "quite soft" to "hard", depending on what was in the validation
+set.  However, it might not have been worth it, considering the amount of time
+waiting for a result. \emph{InterpolatedProbModel} without optimizing for the
+"cut-off" and "hardness" of the cut-off had about the same performance in terms
+of MAE.
+
+Overall, I am quite happy with the performance of \emph{InterpolatedProbModel}.
+It will be used as part of a whole end-to-end system that would be used to
+eventually predict when we need to hire teachers.
+
 \subsection{Improvement}
 
 This project, as described before, is supposed to be part of an end-to-end
