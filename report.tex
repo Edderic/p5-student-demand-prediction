@@ -1009,6 +1009,21 @@ demand. Similarly, another thing that would improve this project is if the
 student demand forecast is then connected with the recommender algorithm so we
 could run simulations on when we think teachers would be needed next.
 
+\section{Appendix}
+
+\subsection{Code Overview}
+
+\emph{Scheduling Patterns.ipynb} is an iPython Notebook that goes opens the
+anonymized lesson request data
+(\emph{data/export\_lesson\_requests\_2016\_09\_08.pkl}) and aggregates them
+into schedules for each user (\emph{unique\_user\_summaries.pkl}). The
+predictions of different models over months of test data is done through
+\emph{code/main.py}, which uses \emph{unique\_user\_summaries.pkl} to generate
+the predictions (\emph{x\_model\_errors.pkl}). Sensitivity analysis is done
+through \emph{code/sensitivity\_analysis.py}. Graphs of errors and the
+accompanying tables were then generated through \emph{Predictions.ipynb}, which
+makes use of \emph{x\_model\_errors.pkl}.
+
 \bibliographystyle{plain}
 \bibliography{references}
 
