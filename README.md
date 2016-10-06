@@ -10,7 +10,7 @@ going to take lessons. This project uses Python 2.7.11 and iPython Notebooks
 
 - `Scheduling Patterns.ipynb` is an iPython Notebook that goes opens the
   anonymized lesson request data (`data/export lesson requests 2016 09 08.pkl`)
-and aggregates them into schedules for each user (unique user summaries.pkl).
+and aggregates them into schedules for each user (`unique_user_summaries.pkl`).
 
 - The predictions of different models over months of test data is done through
   `code/main.py`, which uses `unique_user_summaries.pkl` to generate the
