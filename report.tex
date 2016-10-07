@@ -227,9 +227,9 @@ unique users per timezone. The top 5 \emph{user\_tz} values are Pacific Time
 This validates my intuition, as most customers are taking lessons in those
 timezones.
 
-One issue is that there are 940 lesson requests that are missing user
+One issue is that there are 615 lesson requests that are missing user
 timezones; they seem to be concentrated in the year 2014 -- not really sure why
-this is (Table \ref{tab:sample_lesson_request_missing_user_tz}). These 940
+this is (Table \ref{tab:sample_lesson_request_missing_user_tz}). These 615
 lesson requests are associated with 88 users. These are discarded from the
 dataset used by the models since we cannot localize these times.
 
@@ -321,11 +321,11 @@ dataset used by the models since we cannot localize these times.
     3 & \includegraphics[scale=0.4]{img/tokyo_lr_hexbin.png}\fixedlabel{tokyo_lr_hexbin}{3a}
     & \includegraphics[scale=0.4]{img/new_delhi_lr_hexbin.png}\fixedlabel{new_delhi_lr_hexbin}{3b} \\
   \end{tabular}
-  \caption{Weekly Lesson Request Densities by Top 5 Timezone}
+  \caption{Weekly LR Densities by Timezone (weekday 0 = Monday)}
   \label{figtab:lr_densities_tz}
 \end{table}
 
-We see densities of lesson requests in the span of the week as a function of
+We see densities of lesson requests (LRs) in the span of the week as a function of
 timezone (Table \ref{figtab:lr_densities_tz}). We learn a couple of things from
 this visualization: 1) In general, most lessons start between 6 AM to 10 PM on
 the weekdays, and 2) timezone might be a good predictor of when people will
@@ -415,8 +415,11 @@ fully certain, so we think it's more like 99.99\% (close to $100\%$ but not
 $100\%$). Similarly, suppose we've observed that for a certain timezone with
 only a few lessons that no lessons ever happened from 0-4 AM -- it does not
 mean that the probability that a lesson will happen in the range of 0-4 AM is
-0.  Smoothing out the observed probabilities would probably smooth out our
-incomplete observations to match true probabilities.
+0. Smoothing out the observed probabilities would probably smooth out our
+incomplete observations to match true probabilities. Another big benefit is
+avoiding division by zero.  Encountering a new timezone, without the smoother,
+by definition, would mean that observed probabilities would be 0. We avoid this
+error by simply making use of the smoother.
 
 The advantage of this algorithm is its simplicity, speed, and interpretability.
 It is very simple and easy to understand, and its' predictions are quite fast,
@@ -484,21 +487,73 @@ is not randomly distributed by any means.
 \section{Methodology}
 \subsection{Data Preprocessing}
 
+\begin{table}[]
+  \centering
+  \caption{Frequency of LRs Missing Timezone Over Months}
+  \label{tab:freq_lrs_missing_timezone_over_months}
+  \begin{tabular}{lrr}
+    \hline
+    \textbf{year} & \textbf{month} & \textbf{frequency} \\
+    \hline
+      2014 &  2  &    1\\
+           &  3  &  134\\
+           &  4  &   84\\
+           &  5  &   69\\
+           &  6  &   72\\
+           &  7  &   73\\
+           &  8  &   40\\
+           &  9  &   50\\
+           &  10 &   37\\
+           &  11 &   14\\
+           &  12 &   11\\
+      2015 &  1  &   12\\
+           &  2  &    5\\
+      2016 &  7  &    7\\
+           &  8  &    6\\
+    \hline
+  \end{tabular}
+\end{table}
+
+
+
 In order to create training and test sets, some data preprocessing had to
-occur. I transformed raw lesson request data into schedules. I took the first
-16 lesson requests of each person and discarded the rest (Table
-\ref{tab:example_1st_16_lesson_requests}). 16 was arbitrary -- it could have
-been smaller. These 16 lesson requests were then projected onto a weekly
-schedule. In the weekly schedule (Table
+occur. First was the removal of 615 lesson requests that had missing timezone
+information (Table \ref{tab:freq_lrs_missing_timezone_over_months}). It was
+done because we could gather no useful information about when students actually
+took lessons relative to their timezone from that data (i.e. we don't have an
+idea of what ``morning", ``afternoon", or ``evening" is to them, which renders
+their data useless for prediction). This could possibly have introduced a bias
+in the models created. For instance, consider the case where most of the 615
+lesson requests happened during mornings. Since I removed the data, it's
+possible that the models might underestimate the probability of lesson requests
+happening in the mornings. However, I think it is not a big problem, since this
+data integrity issue is much less likely to happen with newer data. Training
+data used to make predictions, as designed, would only look at a specified last
+few months, which, over time, would lessen the impact of the possibly-biased
+2014 data. In essence, problematic 2014 data would be phased out from being the
+training set as we keep making predictions in the future.
+
+Once the problematic data was removed, I transformed raw lesson request data
+into schedules. I took the first 16 lesson requests of each person and
+discarded the rest (Table \ref{tab:example_1st_16_lesson_requests}). 16 was
+arbitrary -- it could have been smaller. These 16 lesson requests were then
+projected onto a weekly schedule. In the weekly schedule (Table
 \ref{tab:weekly_schedule_first_16_lrs:intermediary}), I looked for the highest
 frequency, which I then used to filter out ones that were less than or equal to
 half of the highest frequency (i.e. "noise", see Table
-\ref{tab:weekly_schedule_first_16_lrs:final}). Then, I labeled each schedule as
-being type 1 if there was only one weekly schedule lesson, 2 if there were two
-entries, etc. We classify the user schedule as belonging to a certain month
-based on when the first lesson request happened. Thus, User $1$ in our
-training/test data would be represented as data in Tables
-\ref{tab:user_summary:part_1} and \ref{tab:user_summary:part_2}.
+\ref{tab:weekly_schedule_first_16_lrs:final}). People generally take lessons
+during the same time over the week, especially when they have elected to take
+lessons regularly in the next two months (which we call a "progress plan").
+However, they might reschedule for a different time for a bunch of reasons
+(e.g. an urgent meeting at work had to happen which blocked them from taking
+lessons at their scheduled lesson time). Filtering these statistical
+fluctuations made sense.
+
+Then, I labeled each schedule as being type 1 if there was only one weekly
+schedule lesson, 2 if there were two entries, etc. We classify the user
+schedule as belonging to a certain month based on when the first lesson request
+happened. Thus, User $1$ in our training/test data would be represented as data
+in Tables \ref{tab:user_summary:part_1} and \ref{tab:user_summary:part_2}.
 
 \begin{table}[]
   \centering
@@ -583,6 +638,43 @@ training/test data would be represented as data in Tables
 
 \subsection{Implementation}
 
+\subsubsection{Code}
+
+\emph{Scheduling Patterns.ipynb} is an iPython Notebook that goes opens the
+anonymized lesson request data
+(\emph{data/export\_lesson\_requests\_2016\_09\_08.pkl}) and aggregates them
+into schedules for each user (\emph{unique\_user\_summaries.pkl}). The
+predictions of different models over months of test data is done through
+\emph{code/main.py}, which uses \emph{unique\_user\_summaries.pkl} to generate
+the predictions (\emph{x\_model\_errors.pkl}). Sensitivity analysis is done
+through \emph{code/sensitivity\_analysis.py}. Graphs of errors and the
+accompanying tables were then generated through \emph{Predictions.ipynb}, which
+makes use of \emph{x\_model\_errors.pkl}.
+
+Models used in this experiment are located in \emph{code/models.py}. Each of
+the models implement \emph{fit} and \emph{predict}. \emph{fit} takes in
+training data as input and \emph{predict} takes in the business forecast, which
+is a list of actual properties of the month-to-be-predicted (e.g. 20 requests
+of 2x/week from Pacific Time, 10 requests of 1x/week from Eastern Time, etc.).
+
+To calculate probabilities, weekly schedules (training and test data) were
+internally represented by \emph{Schedule} and \emph{ActualSchedule} classes
+(see \emph{code/schedule.py}). Each of those classes internally use a Pandas
+\emph{DataFrame} -- rows are start times (0 to 23.75, inclusive), and columns
+are days of the week (0 to 6, inclusive). All the models that have \emph{Prob}
+in the name make use of \emph{Schedule} and \emph{ActualSchedule} for this
+reason.
+
+The class that is responsible for testing a model is \emph{BackTest}
+(\emph{code/backtest.py}). It is responsible for splitting the processed data
+into training and test sets.  \emph{BackTestMultiple} (also in
+\emph{code/backtest.py}), is responsible for testing multiple models and builds
+upon the former.
+
+For more details, please take a look at the \emph{spec} folder. It has a bunch
+of tests that describe how each of the classes are supposed to behave.
+
+
 \subsubsection{Challenges}
 
 One issue was using company name as a predictor variable/feature.  I was hoping
@@ -610,14 +702,22 @@ A seems like it is going to be a subset of B (Figure
 have elements that are not present in the other (Figure
 \ref{fig:venn_a_and_b}).  What do we do with the people that they have in
 common? Do we just label them A? Or should they be B? Or do we label them as
-something else? Due to the time constraints, I decided to tackle this
-problem in the future as an enhancement.
+something else?
+
+However, in terms of having a robust model that is able to generalize well
+given new data, using company information might not be that useful. Everytime
+we encounter a new company, by definition, we would have little to no data. In
+those cases, we cannot make good predictions on company information alone.
 
 Another issue was using legacy code as benchmark. There exists code that helps
 predict student demand. I would have loved to use the code to see how it
 performs against my model. However, code for it is not maintained and is hard
-to understand, and the engineer who wrote it is no longer with us. Given time
-constraints, I chose not to go through with the comparison.
+to understand, and the engineer who wrote it is no longer with us. That part of
+the codebase will probably be deprecated in favor of this, which actually is
+well-tested and heavily documented. Comparing the performance of the models
+here with that black-box benchmark might give us more insight as to possible
+weaknesses of my model, but due to the perceived return of investment, it was
+not done at the time of this writing.
 
 \begin{figure}[h!]
 \centering
@@ -1009,20 +1109,6 @@ demand. Similarly, another thing that would improve this project is if the
 student demand forecast is then connected with the recommender algorithm so we
 could run simulations on when we think teachers would be needed next.
 
-\section{Appendix}
-
-\subsection{Code Overview}
-
-\emph{Scheduling Patterns.ipynb} is an iPython Notebook that goes opens the
-anonymized lesson request data
-(\emph{data/export\_lesson\_requests\_2016\_09\_08.pkl}) and aggregates them
-into schedules for each user (\emph{unique\_user\_summaries.pkl}). The
-predictions of different models over months of test data is done through
-\emph{code/main.py}, which uses \emph{unique\_user\_summaries.pkl} to generate
-the predictions (\emph{x\_model\_errors.pkl}). Sensitivity analysis is done
-through \emph{code/sensitivity\_analysis.py}. Graphs of errors and the
-accompanying tables were then generated through \emph{Predictions.ipynb}, which
-makes use of \emph{x\_model\_errors.pkl}.
 
 \bibliographystyle{plain}
 \bibliography{references}
